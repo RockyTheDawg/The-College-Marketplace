@@ -1,7 +1,20 @@
-# StudentSquare
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
+</div>
 
-StudentSquare is a campus-focused marketplace and housing app for college students. It brings student sublets, roommates, campus marketplace listings, messages, and transit information into one place.
+# Run and deploy your AI Studio app
 
-The project is currently an early-stage web app prototype. The interface demonstrates product ideas and sample content; features that imply identity verification, live transit, lease services, payment services, and much more!
+This contains everything you need to run your app locally.
 
-# The app is a work in progress. 
+View your app in AI Studio: https://ai.studio/apps/1e1322ff-81fa-466d-98fb-5cdd2d641e38
+
+## Run Locally
+
+**Prerequisites:**  Node.js
+
+
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`
