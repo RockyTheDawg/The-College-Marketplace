@@ -34,6 +34,7 @@ import { EscrowInspectionModal } from './components/EscrowInspectionModal';
 import { CampusTransitHub } from './components/CampusTransitHub';
 import { LocationGateModal } from './components/LocationGateModal';
 import { DisconnectedLockScreen } from './components/DisconnectedLockScreen';
+import { PwaFooterBanner } from './components/PwaFooterBanner';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('sublets');
@@ -562,6 +563,9 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* PWA Mobile App & QR Codes Section */}
+      <PwaFooterBanner />
 
       {/* Trust & Safety Campus Footer */}
       <footer className="mt-auto border-t border-stone-200 bg-white py-8 px-4 sm:px-6">
