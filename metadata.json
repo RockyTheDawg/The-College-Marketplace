@@ -1,0 +1,6 @@
+{
+  "name": "QuadHaven - Campus Sublet & Marketplace Hub",
+  "description": "Verified student housing, semester sublets, roommate matching, and campus marketplace with .edu verification and automated lease contract templates.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
