@@ -7,6 +7,7 @@ interface VerificationModalProps {
   currentUser: CurrentUser;
   onUpdateUser: (updated: Partial<CurrentUser>) => void;
   currentCampus: Campus;
+  onDisconnectEdu?: () => void;
 }
 
 export const VerificationModal: React.FC<VerificationModalProps> = ({
@@ -15,6 +16,7 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
   currentUser,
   onUpdateUser,
   currentCampus,
+  onDisconnectEdu,
 }) => {
   const [step, setStep] = useState<'status' | 'input' | 'otp' | 'success'>(
     currentUser.isVerified ? 'status' : 'input'
@@ -51,6 +53,7 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
       name: studentName,
       email: emailInput,
       isVerified: true,
+      isEduConnected: true,
       major: majorInput,
       year: yearInput,
       studentIdLast4: randId,
@@ -130,18 +133,32 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                 </div>
               </div>
 
-              <div className="flex justify-between items-center pt-2">
-                <button
-                  type="button"
-                  onClick={handleRevoke}
-                  className="text-xs text-stone-500 hover:text-red-700 cursor-pointer"
-                >
-                  Change Email / Re-verify
-                </button>
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-2 pt-2 border-t border-stone-100">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleRevoke}
+                    className="text-xs text-stone-500 hover:text-stone-800 cursor-pointer"
+                  >
+                    Change Email
+                  </button>
+                  {onDisconnectEdu && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onDisconnectEdu();
+                      }}
+                      className="text-xs text-red-600 hover:text-red-800 font-medium cursor-pointer"
+                    >
+                      Disconnect .edu & Sign Out
+                    </button>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 text-xs font-semibold text-white bg-stone-900 hover:bg-stone-800 rounded-md cursor-pointer"
+                  className="px-4 py-2 text-xs font-semibold text-white bg-stone-900 hover:bg-stone-800 rounded-md cursor-pointer w-full sm:w-auto"
                 >
                   Done
                 </button>
@@ -152,7 +169,7 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
           {step === 'input' && (
             <form onSubmit={handleSendCode} className="space-y-4">
               <div className="text-xs text-stone-600 leading-relaxed">
-                To eliminate fraudulent accounts, sublease deposits scams, and off-campus scalpers, QuadHaven requires an active institutional .edu email from an accredited university.
+                To eliminate fraudulent accounts, sublease deposits scams, and off-campus scalpers, StudentSquare requires an active institutional .edu email from an accredited university.
               </div>
 
               <div>

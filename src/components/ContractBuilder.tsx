@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SubleaseContract, Campus, CurrentUser, SubletListing } from '../types';
+import { INITIAL_INSPECTION_CHECKLIST } from '../data/mockData';
 
 interface ContractBuilderProps {
   currentCampus: Campus;
@@ -8,6 +9,8 @@ interface ContractBuilderProps {
   onSaveContract: (contract: SubleaseContract) => void;
   prefillListing?: SubletListing | null;
   onClearPrefill?: () => void;
+  onOpenParentPortal: () => void;
+  onOpenEscrowModal: () => void;
 }
 
 export const ContractBuilder: React.FC<ContractBuilderProps> = ({
@@ -17,8 +20,9 @@ export const ContractBuilder: React.FC<ContractBuilderProps> = ({
   onSaveContract,
   prefillListing,
   onClearPrefill,
+  onOpenParentPortal,
+  onOpenEscrowModal,
 }) => {
-  // Active selected or new contract
   const [activeContractId, setActiveContractId] = useState<string>(
     contracts[0]?.id || 'new'
   );
@@ -34,6 +38,7 @@ export const ContractBuilder: React.FC<ContractBuilderProps> = ({
   const [termEnd, setTermEnd] = useState<string>('2026-08-15');
   const [monthlyRent, setMonthlyRent] = useState<number>(1200);
   const [securityDeposit, setSecurityDeposit] = useState<number>(600);
+  const [guarantorRequired, setGuarantorRequired] = useState<boolean>(true);
   const [utilitiesIncluded, setUtilitiesIncluded] = useState<string>(
     'Water, trash, recycling, and high-speed campus WiFi. Electricity split equally among residents.'
   );
@@ -42,7 +47,7 @@ export const ContractBuilder: React.FC<ContractBuilderProps> = ({
   );
   const [sublesseeSignature, setSublesseeSignature] = useState<string>('');
   const [sublessorSignature, setSublessorSignature] = useState<string>('');
-  const [contractStatus, setContractStatus] = useState<'Draft' | 'Pending Sublessee Signature' | 'Fully Executed'>('Draft');
+  const [contractStatus, setContractStatus] = useState<'Draft' | 'Pending Sublessee Signature' | 'Pending Guarantor Signature' | 'Fully Executed'>('Draft');
   const [showSignedSuccess, setShowSignedSuccess] = useState<boolean>(false);
 
   // Load from prefillListing if provided
@@ -78,6 +83,7 @@ export const ContractBuilder: React.FC<ContractBuilderProps> = ({
     setSecurityDeposit(c.securityDeposit);
     setUtilitiesIncluded(c.utilitiesIncluded);
     setHouseRules(c.houseRules);
+    setGuarantorRequired(c.guarantorRequired);
     setSublessorSignature(c.sublessorSignature || '');
     setSublesseeSignature(c.sublesseeSignature || '');
     setContractStatus(c.status);
@@ -96,6 +102,7 @@ export const ContractBuilder: React.FC<ContractBuilderProps> = ({
     setTermEnd('2026-08-15');
     setMonthlyRent(1200);
     setSecurityDeposit(600);
+    setGuarantorRequired(true);
     setSublessorSignature('');
     setSublesseeSignature('');
     setContractStatus('Draft');
@@ -107,7 +114,9 @@ export const ContractBuilder: React.FC<ContractBuilderProps> = ({
       const sig = sublesseeSignature.trim() || currentUser.name;
       setSublesseeSignature(sig);
       const isBothSigned = !!sublessorSignature;
-      const nextStatus = isBothSigned ? 'Fully Executed' : 'Pending Sublessee Signature';
+      const nextStatus = isBothSigned
+        ? (guarantorRequired ? 'Pending Guarantor Signature' : 'Fully Executed')
+        : 'Pending Sublessee Signature';
       setContractStatus(nextStatus);
 
       const updatedContract: SubleaseContract = {
@@ -115,7 +124,7 @@ export const ContractBuilder: React.FC<ContractBuilderProps> = ({
         campusId: currentCampus.id,
         universityName: currentCampus.name,
         createdAt: new Date().toISOString().split('T')[0],
-        status: isBothSigned ? 'Fully Executed' : 'Pending Sublessee Signature',
+        status: nextStatus,
         sublessorName,
         sublessorEmail,
         sublesseeName,
@@ -132,6 +141,27 @@ export const ContractBuilder: React.FC<ContractBuilderProps> = ({
         sublessorSignedAt: sublessorSignature ? new Date().toISOString() : undefined,
         sublesseeSignature: sig,
         sublesseeSignedAt: new Date().toISOString(),
+        guarantorRequired,
+        guarantor: {
+          name: 'Maria Rivera',
+          email: 'm.rivera.family@gmail.com',
+          phone: '(510) 555-0182',
+          relationship: 'Mother',
+          address: '742 Evergreen Terrace, San Jose, CA',
+          status: 'Reviewing',
+          depositFunded: true,
+          paymentMethod: 'Chase ACH Checking (···4921)',
+        },
+        escrow: {
+          escrowId: `escrow_${Date.now().toString().slice(-4)}`,
+          depositAmount: securityDeposit,
+          status: 'Held in Escrow',
+          protectionPlanActive: true,
+          coverageMax: 10000,
+          inspectionDeadline: '48 hours post move-in',
+          disputeResolutionGuaranteed: true,
+        },
+        inspectionChecklist: INITIAL_INSPECTION_CHECKLIST,
       };
       onSaveContract(updatedContract);
       setShowSignedSuccess(true);
@@ -139,14 +169,10 @@ export const ContractBuilder: React.FC<ContractBuilderProps> = ({
     } else {
       const sig = sublessorName || currentUser.name;
       setSublessorSignature(sig);
-      const isBothSigned = !!sublesseeSignature;
-      setContractStatus(isBothSigned ? 'Fully Executed' : 'Pending Sublessee Signature');
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const currentContractObj = contracts.find(c => c.id === activeContractId) || contracts[0];
 
   return (
     <div className="space-y-6">
@@ -154,17 +180,17 @@ export const ContractBuilder: React.FC<ContractBuilderProps> = ({
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-stone-200 pb-5">
         <div>
           <div className="flex items-center gap-2 text-xs text-stone-500 mb-1">
-            <span>{currentCampus.name} Legal Template</span>
+            <span>StudentSquare Legal Architecture</span>
             <span aria-hidden="true">·</span>
-            <span>Standard Residential Sublease</span>
+            <span>All 50 States Uniform Residential Sublease</span>
             <span aria-hidden="true">·</span>
-            <span className="text-emerald-700 font-medium">Enforceable Student Agreement</span>
+            <span className="text-emerald-700 font-medium">Co-Signer & Escrow Compliant</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 font-display text-balance">
-            Automated Sublease Contract Generator
+            Automated Sublease Agreement & Escrow Protocol
           </h1>
           <p className="text-sm text-stone-600 mt-1 max-w-2xl">
-            Protect both parties with our campus-vetted sublease contract. Automatically populates property clauses, security deposit protections, utility splits, and legally binding digital signatures.
+            Vetted student sublease contract with built-in Parent/Guarantor Co-Signer covenants and third-party deposit escrow locking to ensure safe off-campus housing.
           </p>
         </div>
 
@@ -176,13 +202,13 @@ export const ContractBuilder: React.FC<ContractBuilderProps> = ({
             + New Agreement
           </button>
           <button
-            onClick={handlePrint}
+            onClick={() => window.print()}
             className="px-4 py-2 text-xs font-semibold text-white bg-stone-900 hover:bg-stone-800 rounded-md transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
             </svg>
-            <span>Print / Save PDF</span>
+            <span>Print PDF</span>
           </button>
         </div>
       </div>
@@ -193,22 +219,22 @@ export const ContractBuilder: React.FC<ContractBuilderProps> = ({
             ✓
           </div>
           <div>
-            <span className="font-semibold">Sublease Agreement Digitally Signed & Recorded!</span>
+            <span className="font-semibold">Sublease Contract Executed & Escrow Protected!</span>
             <p className="text-emerald-800 mt-0.5">
-              Both parties have official verification timestamps under {currentCampus.name} campus honor policy.
+              Parent co-signer portal notified and third-party escrow vault created for this lease.
             </p>
           </div>
         </div>
       )}
 
-      {/* Main Grid: Left editor parameters, Right live formatted document preview */}
+      {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Column: Form & Clause Controls */}
         <div className="lg:col-span-5 space-y-4">
-          {/* Existing contracts selector */}
+          {/* Contracts selector */}
           {contracts.length > 0 && (
             <div className="bg-white rounded-lg border border-stone-200 p-3">
-              <span className="text-xs text-stone-500 font-medium block mb-2">Saved Student Contracts</span>
+              <span className="text-xs text-stone-500 font-medium block mb-2">Active Lease Agreements</span>
               <div className="space-y-1">
                 {contracts.map((c) => (
                   <button
@@ -230,7 +256,7 @@ export const ContractBuilder: React.FC<ContractBuilderProps> = ({
 
           <div className="bg-white rounded-lg border border-stone-200 p-5 space-y-4 shadow-xs">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-700 font-mono">
-              Contract Terms & Parties
+              Contract Terms & Financial Provisions
             </h2>
 
             <div className="space-y-3">
@@ -348,28 +374,34 @@ export const ContractBuilder: React.FC<ContractBuilderProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">
-                  Utilities & Internet Coverage
+              {/* Guarantor Requirement Checkbox */}
+              <div className="pt-2">
+                <label className="flex items-center gap-2 text-xs text-stone-800 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={guarantorRequired}
+                    onChange={(e) => setGuarantorRequired(e.target.checked)}
+                    className="rounded border-stone-300 text-stone-900 cursor-pointer"
+                  />
+                  <span className="font-semibold">Require Parent / Guardian Co-Signer Guarantee</span>
                 </label>
-                <textarea
-                  rows={2}
-                  value={utilitiesIncluded}
-                  onChange={(e) => setUtilitiesIncluded(e.target.value)}
-                  className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded focus:outline-none focus:ring-1 focus:ring-stone-900"
-                />
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">
-                  Quiet Hours & House Rules
-                </label>
-                <textarea
-                  rows={2}
-                  value={houseRules}
-                  onChange={(e) => setHouseRules(e.target.value)}
-                  className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded focus:outline-none focus:ring-1 focus:ring-stone-900"
-                />
+              {/* Escrow Vault Details Callout */}
+              <div className="bg-stone-50 border border-stone-200 rounded p-3 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-stone-900">Third-Party Escrow Vault</span>
+                  <button
+                    type="button"
+                    onClick={onOpenEscrowModal}
+                    className="text-emerald-800 underline font-medium cursor-pointer"
+                  >
+                    View Checklist
+                  </button>
+                </div>
+                <p className="text-stone-600 text-[11px]">
+                  Deposit of ${securityDeposit}.00 is held in escrow until 48 hours post move-in. Includes $10,000 property damage policy.
+                </p>
               </div>
             </div>
 
@@ -400,14 +432,20 @@ export const ContractBuilder: React.FC<ContractBuilderProps> = ({
                 </div>
               </div>
 
-              {!sublessorSignature && (
+              <div className="flex justify-between items-center pt-1 text-xs">
+                <button
+                  onClick={onOpenParentPortal}
+                  className="text-stone-900 font-medium hover:underline cursor-pointer"
+                >
+                  Open Parent Co-Signer Portal →
+                </button>
                 <button
                   onClick={() => handleSignContract('sublessor')}
-                  className="text-xs text-stone-600 hover:text-stone-900 underline block cursor-pointer"
+                  className="text-stone-500 hover:text-stone-800 underline cursor-pointer"
                 >
-                  Sign as Sublessor ({sublessorName || 'Current Host'})
+                  Sign as Host ({sublessorName || 'Current Host'})
                 </button>
-              )}
+              </div>
             </div>
           </div>
         </div>
@@ -417,13 +455,13 @@ export const ContractBuilder: React.FC<ContractBuilderProps> = ({
           {/* Header Seal */}
           <div className="text-center pb-4 border-b-2 border-stone-900">
             <h2 className="text-base sm:text-lg font-bold tracking-wider uppercase font-display text-stone-900">
-              Residential Sublease Agreement
+              Student Residential Sublease Agreement
             </h2>
             <p className="text-xs text-stone-500 font-sans tracking-wide mt-1 uppercase">
               Governed by the Municipal Housing Code of {currentCampus.city}, {currentCampus.state}
             </p>
             <p className="text-[11px] text-stone-400 font-mono mt-0.5">
-              QuadHaven Student Housing Verification Protocol · Reference #{activeContractId}
+              StudentSquare Housing Protocol · Escrow Vault #{currentContractObj.escrow.escrowId}
             </p>
           </div>
 
@@ -444,7 +482,7 @@ export const ContractBuilder: React.FC<ContractBuilderProps> = ({
             <p>
               Sublessor agrees to sublease to Sublessee, and Sublessee agrees to rent from Sublessor, the portion of the residential property located at:{' '}
               <span className="font-semibold">{propertyAddress || '2435 Dwight Way, Apt 3B, Berkeley, CA'}</span>, specifically consisting of{' '}
-              <span className="font-semibold">{unitNumber || 'Designated Master Ensuite Bedroom'}</span>, along with shared access to kitchen, living areas, and common facilities.
+              <span className="font-semibold">{unitNumber || 'Designated Master Ensuite Bedroom'}</span>.
             </p>
           </div>
 
@@ -455,78 +493,69 @@ export const ContractBuilder: React.FC<ContractBuilderProps> = ({
             </h3>
             <p>
               The term of this Sublease shall commence on <span className="font-semibold underline">{termStart}</span>, and shall terminate on{' '}
-              <span className="font-semibold underline">{termEnd}</span>, at which point Sublessee shall peacefully surrender possession in clean condition.
+              <span className="font-semibold underline">{termEnd}</span>.
             </p>
           </div>
 
-          {/* Section 3: Rent & Security Deposit */}
+          {/* Section 3: Rent & Escrow Deposit */}
           <div>
             <h3 className="font-sans font-bold text-xs uppercase tracking-wider text-stone-900 mb-1">
-              3. Rent & Security Deposit
+              3. Rent & Third-Party Deposit Escrow Vault
             </h3>
             <p>
-              Sublessee covenants to pay Sublessor rent at the rate of <span className="font-semibold tabular-nums font-mono">${monthlyRent}.00 USD</span> per calendar month, due on the first day of each month. A security deposit of{' '}
-              <span className="font-semibold tabular-nums font-mono">${securityDeposit}.00 USD</span> shall be held by Sublessor and returned within 14 days of lease termination, minus documented repairs for physical damage exceeding ordinary wear and tear.
+              Sublessee covenants to pay monthly rent of <span className="font-semibold tabular-nums font-mono">${monthlyRent}.00 USD</span>. The security deposit of <span className="font-semibold tabular-nums font-mono">${securityDeposit}.00 USD</span> shall be held by <span className="font-semibold">StudentSquare Escrow Vault</span> and will not be disbursed to Sublessor until 48 hours following move-in verification checklist approval.
             </p>
           </div>
 
-          {/* Section 4: Utilities */}
-          <div>
-            <h3 className="font-sans font-bold text-xs uppercase tracking-wider text-stone-900 mb-1">
-              4. Utilities & Amenities
-            </h3>
-            <p>
-              The monthly rent includes: <span className="italic">{utilitiesIncluded}</span>.
-            </p>
-          </div>
-
-          {/* Section 5: Master Lease and Landlord Consent */}
-          <div>
-            <h3 className="font-sans font-bold text-xs uppercase tracking-wider text-stone-900 mb-1">
-              5. Landlord Consent & Primary Lease Compliance
-            </h3>
-            <p>
-              Sublessor represents that the landlord/property owner of the premises has granted consent for this sublease. Sublessee agrees to strictly abide by all terms of the master lease and municipal noise ordinances.
-            </p>
-          </div>
-
-          {/* Section 6: House Rules */}
-          <div>
-            <h3 className="font-sans font-bold text-xs uppercase tracking-wider text-stone-900 mb-1">
-              6. House Rules & Quiet Enjoyment
-            </h3>
-            <p>
-              {houseRules}
-            </p>
-          </div>
+          {/* Section 4: Parent / Guarantor Co-Signer Clause */}
+          {guarantorRequired && (
+            <div>
+              <h3 className="font-sans font-bold text-xs uppercase tracking-wider text-stone-900 mb-1">
+                4. Parent / Legal Guardian Co-Signer Guaranty
+              </h3>
+              <p>
+                As a condition of this sublease, the undersigned Guarantor (<span className="font-semibold">{currentContractObj.guarantor?.name || 'Maria Rivera'}</span>, {currentContractObj.guarantor?.relationship || 'Mother'}) unconditionally guarantees performance of all monetary obligations hereunder.
+              </p>
+            </div>
+          )}
 
           {/* Signatures */}
-          <div className="pt-6 border-t-2 border-stone-300 grid grid-cols-2 gap-8 font-sans">
-            <div className="space-y-2">
-              <span className="text-[11px] font-semibold uppercase text-stone-500 block">Sublessor Signature:</span>
-              <div className="h-12 border-b border-stone-400 flex items-end pb-1">
+          <div className="pt-6 border-t-2 border-stone-300 grid grid-cols-1 sm:grid-cols-3 gap-6 font-sans">
+            <div className="space-y-1">
+              <span className="text-[10px] font-semibold uppercase text-stone-500 block">Sublessor Signature:</span>
+              <div className="h-10 border-b border-stone-400 flex items-end pb-1">
                 {sublessorSignature ? (
-                  <span className="font-serif italic text-lg text-stone-900">{sublessorSignature}</span>
+                  <span className="font-serif italic text-base text-stone-900">{sublessorSignature}</span>
                 ) : (
-                  <span className="text-xs text-stone-400 italic">[Pending Signature]</span>
+                  <span className="text-xs text-stone-400 italic">[Pending]</span>
                 )}
               </div>
-              <div className="text-[11px] text-stone-500 font-mono">
-                {sublessorName} · @{currentCampus.emailDomain}
-              </div>
+              <div className="text-[10px] text-stone-500 font-mono">{sublessorName}</div>
             </div>
 
-            <div className="space-y-2">
-              <span className="text-[11px] font-semibold uppercase text-stone-500 block">Sublessee Signature:</span>
-              <div className="h-12 border-b border-stone-400 flex items-end pb-1">
+            <div className="space-y-1">
+              <span className="text-[10px] font-semibold uppercase text-stone-500 block">Sublessee Signature:</span>
+              <div className="h-10 border-b border-stone-400 flex items-end pb-1">
                 {sublesseeSignature ? (
-                  <span className="font-serif italic text-lg text-emerald-900 font-bold">{sublesseeSignature}</span>
+                  <span className="font-serif italic text-base text-emerald-900 font-bold">{sublesseeSignature}</span>
                 ) : (
-                  <span className="text-xs text-stone-400 italic">[Pending Signature]</span>
+                  <span className="text-xs text-stone-400 italic">[Pending]</span>
                 )}
               </div>
-              <div className="text-[11px] text-stone-500 font-mono">
-                {sublesseeName} · Verified Student
+              <div className="text-[10px] text-stone-500 font-mono">{sublesseeName}</div>
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-[10px] font-semibold uppercase text-stone-500 block">Guarantor Co-Signer:</span>
+              <div className="h-10 border-b border-stone-400 flex items-end pb-1">
+                {currentContractObj.guarantor?.signature ? (
+                  <span className="font-serif italic text-base text-stone-900">{currentContractObj.guarantor.signature}</span>
+                ) : (
+                  <span className="text-xs text-stone-400 italic">[Reviewing]</span>
+                )}
+              </div>
+              <div className="text-[10px] text-stone-500 font-mono">
+                {currentContractObj.guarantor?.name || 'Maria Rivera'}
               </div>
             </div>
           </div>
@@ -535,9 +564,9 @@ export const ContractBuilder: React.FC<ContractBuilderProps> = ({
           <div className="pt-4 flex items-center justify-between text-xs text-stone-500 border-t border-stone-100 font-sans">
             <div className="flex items-center gap-1.5">
               <span className={`w-2 h-2 rounded-full ${contractStatus === 'Fully Executed' ? 'bg-emerald-600' : 'bg-amber-600'}`} />
-              <span className="font-medium text-stone-700">Status: {contractStatus}</span>
+              <span className="font-medium text-stone-700">Contract Status: {contractStatus}</span>
             </div>
-            <span className="font-mono text-[11px]">Timestamped via QuadHaven</span>
+            <span className="font-mono text-[11px]">Vault Status: {currentContractObj.escrow.status}</span>
           </div>
         </div>
       </div>

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   CampusId,
-  Campus,
   CurrentUser,
   SubletListing,
   MarketplaceItem,
@@ -10,7 +9,7 @@ import {
   SubleaseContract,
 } from './types';
 import {
-  CAMPUSES,
+  ALL_CAMPUSES,
   INITIAL_USER,
   INITIAL_SUBLETS,
   INITIAL_MARKETPLACE,
@@ -28,13 +27,24 @@ import { MarketplaceDetailModal } from './components/MarketplaceDetailModal';
 import { CreateMarketplaceModal } from './components/CreateMarketplaceModal';
 import { RoommateMatcher } from './components/RoommateMatcher';
 import { ContractBuilder } from './components/ContractBuilder';
+import { ParentPortalView } from './components/ParentPortalView';
 import { MessagesHub } from './components/MessagesHub';
 import { VerificationModal } from './components/VerificationModal';
+import { EscrowInspectionModal } from './components/EscrowInspectionModal';
+import { CampusTransitHub } from './components/CampusTransitHub';
+import { LocationGateModal } from './components/LocationGateModal';
+import { DisconnectedLockScreen } from './components/DisconnectedLockScreen';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('sublets');
   const [currentCampusId, setCurrentCampusId] = useState<CampusId>('berkeley');
   const [currentUser, setCurrentUser] = useState<CurrentUser>(INITIAL_USER);
+
+  // Gating & Security States
+  const [isSignedOut, setIsSignedOut] = useState<boolean>(false);
+  const [isLocationAllowed, setIsLocationAllowed] = useState<boolean>(true);
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState<boolean>(false);
+  const [actionRestrictedNotice, setActionRestrictedNotice] = useState<string | null>(null);
 
   // Entities state
   const [sublets, setSublets] = useState<SubletListing[]>(INITIAL_SUBLETS);
@@ -49,27 +59,66 @@ export default function App() {
   const [isVerificationOpen, setIsVerificationOpen] = useState(false);
   const [isCreateSubletOpen, setIsCreateSubletOpen] = useState(false);
   const [isCreateItemOpen, setIsCreateItemOpen] = useState(false);
+  const [isEscrowModalOpen, setIsEscrowModalOpen] = useState(false);
   const [prefillContractListing, setPrefillContractListing] = useState<SubletListing | null>(null);
   const [activeConversationId, setActiveConversationId] = useState<string>(
     INITIAL_CONVERSATIONS[0]?.id || ''
   );
 
-  const currentCampus = CAMPUSES.find((c) => c.id === currentCampusId) || CAMPUSES[0];
+  const currentCampus = ALL_CAMPUSES.find((c) => c.id === currentCampusId) || ALL_CAMPUSES[0];
+  const activeContract = contracts[0] || INITIAL_CONTRACTS[0];
 
   // Total unread messages
   const unreadCount = conversations.reduce((acc, c) => acc + c.unreadCount, 0);
 
-  // Handlers
+  // Email Verification Gate Helper
+  // Ensures that student email MUST be verified before they can post, message, or do anything!
+  const ensureVerified = (actionName: string): boolean => {
+    if (!currentUser.isVerified) {
+      setActionRestrictedNotice(
+        `Email verification required: You must verify your official ${currentCampus.shortName} (.edu) email before you can ${actionName}.`
+      );
+      setIsVerificationOpen(true);
+      return false;
+    }
+    return true;
+  };
+
+  // Location Access Check
+  const ensureLocationAllowed = (): boolean => {
+    if (!isLocationAllowed) {
+      setIsLocationModalOpen(true);
+      return false;
+    }
+    return true;
+  };
+
+  // Campus Selector Handler
   const handleSelectCampus = (campusId: CampusId) => {
     setCurrentCampusId(campusId);
-    // Adapt user email domain if re-verifying
-    const targetCampus = CAMPUSES.find((c) => c.id === campusId);
+    const targetCampus = ALL_CAMPUSES.find((c) => c.id === campusId);
     if (targetCampus) {
       setCurrentUser((prev) => ({
         ...prev,
         campusId,
       }));
     }
+  };
+
+  // Disconnect EDU Handler: Revokes access and signs out automatically
+  const handleDisconnectEdu = () => {
+    setCurrentUser((prev) => ({
+      ...prev,
+      isEduConnected: false,
+      isVerified: false,
+    }));
+    setIsSignedOut(true);
+  };
+
+  // Re-connect EDU Handler: Re-authenticate to regain access
+  const handleReconnectEdu = () => {
+    setIsSignedOut(false);
+    setIsVerificationOpen(true);
   };
 
   const handleToggleSaveSublet = (id: string) => {
@@ -96,8 +145,11 @@ export default function App() {
     });
   };
 
+  // Message Poster Handler (Gated by Email Verification & Location)
   const handleMessagePoster = (listing: SubletListing) => {
-    // Find or create conversation
+    if (!ensureVerified('message sublet hosts')) return;
+    if (!ensureLocationAllowed()) return;
+
     let existing = conversations.find((c) => c.listingId === listing.id);
     if (!existing) {
       const newConv: Conversation = {
@@ -115,7 +167,7 @@ export default function App() {
             id: `msg_${Date.now()}`,
             senderId: currentUser.id,
             senderName: currentUser.name,
-            text: `Hi ${listing.poster.name}, I am interested in your sublet on ${listing.address} for ${listing.term}. Is it still available for the full duration?`,
+            text: `Hi ${listing.poster.name}, I saw your sublet on ${listing.address} for ${listing.term}. Is it still available? I also checked the shuttle and bike route and it's perfect for my morning classes.`,
             timestamp: 'Just now',
           },
         ],
@@ -128,7 +180,11 @@ export default function App() {
     setActiveTab('messages');
   };
 
+  // Message Seller Handler (Gated by Email Verification)
   const handleMessageSeller = (item: MarketplaceItem) => {
+    if (!ensureVerified('message marketplace sellers')) return;
+    if (!ensureLocationAllowed()) return;
+
     let existing = conversations.find((c) => c.listingId === item.id);
     if (!existing) {
       const newConv: Conversation = {
@@ -159,7 +215,11 @@ export default function App() {
     setActiveTab('messages');
   };
 
+  // Connect Roommate Handler (Gated by Email Verification)
   const handleConnectRoommate = (roommate: RoommateProfile) => {
+    if (!ensureVerified('connect with potential roommates')) return;
+    if (!ensureLocationAllowed()) return;
+
     let existing = conversations.find((c) => c.participant.id === roommate.id);
     if (!existing) {
       const newConv: Conversation = {
@@ -182,7 +242,7 @@ export default function App() {
             id: `msg_${Date.now()}`,
             senderId: currentUser.id,
             senderName: currentUser.name,
-            text: `Hi ${roommate.name}, saw your profile on QuadMatch. Our study and cleanliness preferences line up really well. Are you still searching for a roommate for ${roommate.preferredTerm}?`,
+            text: `Hi ${roommate.name}, saw your profile on StudentSquare. Our study and cleanliness preferences line up really well. Are you still searching for a roommate for ${roommate.preferredTerm}?`,
             timestamp: 'Just now',
           },
         ],
@@ -195,12 +255,15 @@ export default function App() {
     setActiveTab('messages');
   };
 
+  // Draft Contract Handler (Gated by Email Verification)
   const handleDraftContract = (listing: SubletListing) => {
+    if (!ensureVerified('initiate legal sublease agreements')) return;
     setPrefillContractListing(listing);
     setActiveTab('contracts');
   };
 
-  const handleDraftContractForListing = (listingId?: string, listingTitle?: string) => {
+  const handleDraftContractForListing = (listingId?: string) => {
+    if (!ensureVerified('draft lease agreements')) return;
     const found = sublets.find((s) => s.id === listingId);
     if (found) {
       setPrefillContractListing(found);
@@ -209,6 +272,8 @@ export default function App() {
   };
 
   const handleSendMessage = (conversationId: string, text: string, isOffer?: boolean, offerDetails?: any) => {
+    if (!ensureVerified('send chat messages')) return;
+
     const newMsg = {
       id: `msg_${Date.now()}`,
       senderId: currentUser.id,
@@ -233,15 +298,15 @@ export default function App() {
       })
     );
 
-    // Realistic auto-reply simulation after 1.5 seconds
+    // Realistic auto-reply simulation
     setTimeout(() => {
       const replyMsg = {
         id: `reply_${Date.now()}`,
         senderId: 'host_auto',
         senderName: 'Host Response',
         text: isOffer
-          ? `Thanks for your offer! Let me review this with my building management and I will follow up with the sublet contract draft.`
-          : `Thanks for reaching out! Yes, let's connect and review the lease terms together.`,
+          ? `Thanks for your offer! Let me review this with my building management and I will follow up with the sublet contract draft via StudentSquare Escrow.`
+          : `Thanks for reaching out! Yes, let's connect and review the lease terms together. Our parent co-signer portal is also ready whenever your family wants to review.`,
         timestamp: 'Just now',
       };
 
@@ -273,9 +338,38 @@ export default function App() {
     });
   };
 
+  // If user disconnected .edu email: they lose access to the app and are signed out
+  if (isSignedOut || !currentUser.isEduConnected) {
+    return (
+      <div className="min-h-screen bg-stone-100 flex flex-col font-sans">
+        <header className="bg-white border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+          <div className="text-xl font-bold font-display text-stone-900">StudentSquare</div>
+          <span className="text-xs text-red-600 font-mono font-semibold">🔒 Session Terminated</span>
+        </header>
+        <main className="flex-1 flex items-center justify-center p-4">
+          <DisconnectedLockScreen
+            currentCampus={currentCampus}
+            onReconnectEdu={handleReconnectEdu}
+          />
+        </main>
+        <VerificationModal
+          isOpen={isVerificationOpen}
+          onClose={() => setIsVerificationOpen(false)}
+          currentUser={currentUser}
+          onUpdateUser={(updated) => {
+            setCurrentUser((prev) => ({ ...prev, ...updated, isEduConnected: true }));
+            setIsSignedOut(false);
+          }}
+          currentCampus={currentCampus}
+          onDisconnectEdu={handleDisconnectEdu}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-stone-50 font-sans text-stone-900">
-      {/* Top Bar Contract (3 Zones) */}
+      {/* Top Bar Contract with Mobile & Tablet 3-Lines Hamburger Drawer */}
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -283,22 +377,81 @@ export default function App() {
         currentCampus={currentCampus}
         onOpenVerification={() => setIsVerificationOpen(true)}
         onOpenPostListing={() => {
+          if (!ensureVerified('post a listing')) return;
+          if (!ensureLocationAllowed()) return;
           if (activeTab === 'marketplace') setIsCreateItemOpen(true);
           else setIsCreateSubletOpen(true);
         }}
+        onOpenEscrowModal={() => setIsEscrowModalOpen(true)}
+        onDisconnectEdu={handleDisconnectEdu}
         unreadCount={unreadCount}
+        locationVerified={isLocationAllowed}
       />
 
-      {/* Campus Context & Anti-Scam Security Strip */}
+      {/* Campus Context & Nationwide Selector with Nickname Search */}
       <CampusBanner
         currentCampus={currentCampus}
         onSelectCampus={handleSelectCampus}
         currentUser={currentUser}
         onOpenVerification={() => setIsVerificationOpen(true)}
+        onOpenEscrowModal={() => setIsEscrowModalOpen(true)}
+        onOpenTransit={() => setActiveTab('transit')}
+        locationVerified={isLocationAllowed}
       />
 
+      {/* Location Area Notice (Once logged in to EDU, only see what is in their area) */}
+      <div className="bg-white border-b border-stone-200 px-4 sm:px-6 py-2">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="font-semibold text-stone-800">
+              📍 Area-Restricted View Active:
+            </span>
+            <span className="text-stone-600">
+              Only showing housing, sublets, and marketplace items within the <strong>{currentCampus.name}</strong> ({currentCampus.city}, {currentCampus.state}) zone.
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {!isLocationAllowed && (
+              <button
+                onClick={() => setIsLocationModalOpen(true)}
+                className="text-amber-800 bg-amber-100 hover:bg-amber-200 px-2 py-0.5 rounded font-semibold cursor-pointer"
+              >
+                Allow Location Access
+              </button>
+            )}
+            <button
+              onClick={() => setActiveTab('transit')}
+              className="text-stone-600 hover:text-stone-900 cursor-pointer flex items-center gap-1 font-mono text-[11px]"
+            >
+              <span>🚌 Device Bus Sync:</span>
+              <strong className="text-emerald-700">{currentUser.deviceType?.toUpperCase() || 'IOS'}</strong>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Action Restricted Warning Modal Alert (if user tries to post or message while unverified) */}
+      {actionRestrictedNotice && !currentUser.isVerified && (
+        <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 mt-4">
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-3.5 flex items-center justify-between gap-3 text-xs text-amber-900 shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <span className="text-lg">🔒</span>
+              <span>{actionRestrictedNotice}</span>
+            </div>
+            <button
+              onClick={() => setActionRestrictedNotice(null)}
+              className="text-amber-700 hover:text-amber-950 font-bold p-1 cursor-pointer shrink-0"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Content Viewport */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
         {activeTab === 'sublets' && (
           <SubletDirectory
             listings={sublets}
@@ -307,7 +460,11 @@ export default function App() {
             onSelectListing={(l) => setSelectedSublet(l)}
             onMessagePoster={handleMessagePoster}
             onDraftContract={handleDraftContract}
-            onOpenCreateSublet={() => setIsCreateSubletOpen(true)}
+            onOpenCreateSublet={() => {
+              if (ensureVerified('post a sublet listing') && ensureLocationAllowed()) {
+                setIsCreateSubletOpen(true);
+              }
+            }}
             onToggleSave={handleToggleSaveSublet}
           />
         )}
@@ -319,7 +476,11 @@ export default function App() {
             currentUser={currentUser}
             onSelectItem={(item) => setSelectedItem(item)}
             onMessageSeller={handleMessageSeller}
-            onOpenCreateItem={() => setIsCreateItemOpen(true)}
+            onOpenCreateItem={() => {
+              if (ensureVerified('list marketplace items') && ensureLocationAllowed()) {
+                setIsCreateItemOpen(true);
+              }
+            }}
             onToggleSave={handleToggleSaveItem}
           />
         )}
@@ -333,6 +494,39 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'transit' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-stone-200">
+              <div>
+                <h1 className="text-2xl font-bold font-display text-stone-900">
+                  Campus Shuttle & Transit Synchronization
+                </h1>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  Live bus arrivals, route telemetry, and automatic device integration for iOS and Android
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveTab('sublets')}
+                className="self-start text-xs font-semibold text-stone-600 hover:text-stone-900 cursor-pointer"
+              >
+                ← Back to Housing
+              </button>
+            </div>
+
+            <CampusTransitHub
+              currentCampus={currentCampus}
+              deviceType={currentUser.deviceType || 'ios'}
+              onUpdateDeviceType={(dev) =>
+                setCurrentUser((prev) => ({ ...prev, deviceType: dev }))
+              }
+              busSyncEnabled={currentUser.busSyncEnabled ?? true}
+              onToggleBusSync={(en) =>
+                setCurrentUser((prev) => ({ ...prev, busSyncEnabled: en }))
+              }
+            />
+          </div>
+        )}
+
         {activeTab === 'contracts' && (
           <ContractBuilder
             currentCampus={currentCampus}
@@ -341,6 +535,18 @@ export default function App() {
             onSaveContract={handleSaveContract}
             prefillListing={prefillContractListing}
             onClearPrefill={() => setPrefillContractListing(null)}
+            onOpenParentPortal={() => setActiveTab('guarantor')}
+            onOpenEscrowModal={() => setIsEscrowModalOpen(true)}
+          />
+        )}
+
+        {activeTab === 'guarantor' && (
+          <ParentPortalView
+            currentCampus={currentCampus}
+            currentUser={currentUser}
+            activeContract={activeContract}
+            onUpdateContract={handleSaveContract}
+            onOpenContractView={() => setActiveTab('contracts')}
           />
         )}
 
@@ -362,11 +568,11 @@ export default function App() {
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-base font-bold text-stone-900 font-display">QuadHaven</span>
+              <span className="text-base font-bold text-stone-900 font-display">StudentSquare</span>
               <span className="text-xs text-stone-500">· Campus Sublet & Marketplace Hub</span>
             </div>
             <p className="text-xs text-stone-500 mt-1 max-w-md">
-              Restricted to verified university students. All housing agreements and transactions are executed under campus honor codes to eliminate scam deposits and unverified listings.
+              Restricted to verified university students across all 50 US states & private colleges. Protected by FDIC-insured deposit escrow, parent co-signer workflows, and campus transit overlays.
             </p>
           </div>
 
@@ -378,40 +584,63 @@ export default function App() {
               Housing Directory
             </button>
             <button
-              onClick={() => setActiveTab('marketplace')}
-              className="hover:text-stone-900 cursor-pointer"
+              onClick={() => setActiveTab('transit')}
+              className="hover:text-stone-900 cursor-pointer text-emerald-800 font-medium"
             >
-              Student Exchange
+              Bus Map & Device Sync
             </button>
             <button
-              onClick={() => setActiveTab('roommates')}
-              className="hover:text-stone-900 cursor-pointer"
+              onClick={() => setActiveTab('guarantor')}
+              className="hover:text-stone-900 cursor-pointer font-medium text-emerald-800"
             >
-              Roommate Quiz
+              Parent & Guarantor Portal
             </button>
             <button
-              onClick={() => setActiveTab('contracts')}
-              className="hover:text-stone-900 cursor-pointer"
+              onClick={() => setIsEscrowModalOpen(true)}
+              className="hover:text-stone-900 cursor-pointer font-medium text-amber-900"
             >
-              Lease Templates
+              Escrow & Insurance Vault
             </button>
             <button
-              onClick={() => setIsVerificationOpen(true)}
-              className="text-emerald-700 font-medium hover:underline cursor-pointer"
+              onClick={handleDisconnectEdu}
+              className="text-red-600 hover:text-red-800 cursor-pointer font-medium"
             >
-              Verification Policy
+              Disconnect .edu Account
             </button>
           </div>
         </div>
       </footer>
 
+      {/* Location Gate Modal (Enforces location allowed to see only what is in their area) */}
+      <LocationGateModal
+        isOpen={isLocationModalOpen}
+        onClose={() => setIsLocationModalOpen(false)}
+        currentCampus={currentCampus}
+        onAllowLocation={(_coords) => {
+          setIsLocationAllowed(true);
+        }}
+      />
+
       {/* Modals */}
       <VerificationModal
         isOpen={isVerificationOpen}
-        onClose={() => setIsVerificationOpen(false)}
+        onClose={() => {
+          setIsVerificationOpen(false);
+          setActionRestrictedNotice(null);
+        }}
         currentUser={currentUser}
-        onUpdateUser={(updated) => setCurrentUser((prev) => ({ ...prev, ...updated }))}
+        onUpdateUser={(updated) => setCurrentUser((prev) => ({ ...prev, ...updated, isEduConnected: true }))}
         currentCampus={currentCampus}
+        onDisconnectEdu={handleDisconnectEdu}
+      />
+
+      <EscrowInspectionModal
+        isOpen={isEscrowModalOpen}
+        onClose={() => setIsEscrowModalOpen(false)}
+        contract={activeContract}
+        currentCampus={currentCampus}
+        currentUser={currentUser}
+        onUpdateContract={handleSaveContract}
       />
 
       <SubletDetailModal
@@ -421,6 +650,8 @@ export default function App() {
         currentCampus={currentCampus}
         onMessagePoster={handleMessagePoster}
         onDraftContract={handleDraftContract}
+        onOpenParentPortal={() => setActiveTab('guarantor')}
+        onOpenEscrowModal={() => setIsEscrowModalOpen(true)}
       />
 
       <CreateSubletModal

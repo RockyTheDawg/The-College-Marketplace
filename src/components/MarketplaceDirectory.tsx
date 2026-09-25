@@ -76,6 +76,24 @@ export const MarketplaceDirectory: React.FC<MarketplaceDirectoryProps> = ({
         </button>
       </div>
 
+      {/* Unverified Account Warning Banner */}
+      {!currentUser.isVerified && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3.5 text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <span className="text-base">⚠️</span>
+            <span>
+              <strong>Student Verification Required:</strong> Your university .edu email must be verified before you can list marketplace items or message sellers.
+            </span>
+          </div>
+          <button
+            onClick={onOpenCreateItem}
+            className="text-amber-950 font-semibold underline hover:text-black cursor-pointer text-left sm:text-right shrink-0"
+          >
+            Verify .edu Now →
+          </button>
+        </div>
+      )}
+
       {/* Categories & Filter Bar */}
       <div className="bg-white rounded-lg border border-stone-200 p-4 space-y-3 shadow-xs">
         {/* Search */}

@@ -1,19 +1,89 @@
-export type CampusId = 'berkeley' | 'utaustin' | 'umich' | 'nyu' | 'uw';
+export type CampusId = string;
+
+export interface LocalBusRoute {
+  routeNumber: string;
+  routeName: string;
+  destination: string;
+  etaMinutes: number;
+  crowdLevel: 'Low' | 'Medium' | 'Full';
+  isLive: boolean;
+}
+
+export interface CampusBusApp {
+  name: string;
+  appType: string;
+  isMobileSynced: boolean;
+  iosUrl: string;
+  androidUrl: string;
+}
 
 export interface Campus {
   id: CampusId;
   name: string;
   shortName: string;
+  nicknames?: string[];
   emailDomain: string;
   mascot: string;
   city: string;
   state: string;
+  region: 'West' | 'Midwest' | 'Northeast' | 'South';
+  isPrivate: boolean;
   subletCount: number;
   itemCount: number;
+  primaryShuttleName: string;
+  transitHub: string;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
+  campusBusApp?: CampusBusApp;
+  localBuses?: LocalBusRoute[];
+}
+
+export interface LocationState {
+  status: 'prompt' | 'granted' | 'denied' | 'simulated';
+  latitude?: number;
+  longitude?: number;
+  distanceMiles?: number;
+  cityName?: string;
+  inCampusRange: boolean;
 }
 
 export type HousingTerm = 'Summer 2026' | 'Fall 2026' | 'Spring 2027' | 'Full Year 2026-2027';
 export type RoomType = 'Entire Studio' | 'Private Room / Private Bath' | 'Private Room / Shared Bath' | 'Shared Room' | '2-Bedroom Takeover';
+
+export interface TransitOverlay {
+  shuttleName: string;
+  nearestStop: string;
+  walkTimeToStopMin: number;
+  nextArrivalsMin: number[];
+  bikeLaneSafetyScore: number; // 0-100
+  bikeLaneType: 'Protected Green Wave' | 'Dedicated Buffered Lane' | 'Campus Dedicated Path' | 'Shared Low-Traffic';
+  lectureHallDistances: {
+    hallName: string;
+    walkTimeMin: number;
+    distanceMi: number;
+    shuttleAvailable?: boolean;
+  }[];
+}
+
+export interface EscrowDetails {
+  escrowId: string;
+  depositAmount: number;
+  status: 'Pending Payment' | 'Held in Escrow' | 'Released to Host' | 'Under Inspection Dispute';
+  protectionPlanActive: boolean;
+  coverageMax: number; // e.g. $10,000
+  inspectionDeadline: string;
+  disputeResolutionGuaranteed: boolean;
+}
+
+export interface MoveInInspectionItem {
+  id: string;
+  category: 'Keys & Entry' | 'Bedroom Condition' | 'Bathroom Cleanliness' | 'Appliances & AC' | 'Smoke & Fire Safety';
+  title: string;
+  verified: boolean;
+  notes?: string;
+}
 
 export interface SubletListing {
   id: string;
@@ -50,6 +120,9 @@ export interface SubletListing {
   };
   amenities: string[];
   visualCategory: 'studio' | 'private_room' | 'loft' | 'duplex' | 'modern_apt';
+  transit: TransitOverlay;
+  escrowEligible: boolean;
+  guarantorAccepted: boolean;
   createdAt: string;
 }
 
@@ -139,12 +212,25 @@ export interface Conversation {
   messages: ChatMessage[];
 }
 
+export interface GuarantorInfo {
+  name: string;
+  email: string;
+  phone: string;
+  relationship: 'Mother' | 'Father' | 'Legal Guardian' | 'Other Family';
+  address: string;
+  status: 'Invited' | 'Reviewing' | 'Signed & Approved';
+  signature?: string;
+  signedAt?: string;
+  depositFunded: boolean;
+  paymentMethod?: string;
+}
+
 export interface SubleaseContract {
   id: string;
   campusId: CampusId;
   universityName: string;
   createdAt: string;
-  status: 'Draft' | 'Pending Sublessee Signature' | 'Fully Executed';
+  status: 'Draft' | 'Pending Sublessee Signature' | 'Pending Guarantor Signature' | 'Fully Executed';
   sublessorName: string;
   sublessorEmail: string;
   sublesseeName: string;
@@ -161,6 +247,11 @@ export interface SubleaseContract {
   sublessorSignedAt?: string;
   sublesseeSignature?: string;
   sublesseeSignedAt?: string;
+  // Guarantor & Escrow Additions
+  guarantorRequired: boolean;
+  guarantor?: GuarantorInfo;
+  escrow: EscrowDetails;
+  inspectionChecklist: MoveInInspectionItem[];
 }
 
 export interface CurrentUser {
@@ -168,10 +259,15 @@ export interface CurrentUser {
   name: string;
   email: string;
   isVerified: boolean;
+  isEduConnected: boolean;
   campusId: CampusId;
   major: string;
   year: string;
   studentIdLast4: string;
   savedSubletIds: string[];
   savedItemIds: string[];
+  hasGuarantorLinked: boolean;
+  guarantorEmail?: string;
+  deviceType?: 'ios' | 'android' | 'desktop';
+  busSyncEnabled?: boolean;
 }

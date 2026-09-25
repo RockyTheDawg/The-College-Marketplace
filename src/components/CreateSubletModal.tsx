@@ -80,6 +80,21 @@ export const CreateSubletModal: React.FC<CreateSubletModalProps> = ({
         'Study Space & Desk',
       ],
       visualCategory,
+      transit: {
+        shuttleName: `${currentCampus.shortName} Campus Transit`,
+        nearestStop: `${neighborhood} Avenue Stop`,
+        walkTimeToStopMin: 2,
+        nextArrivalsMin: [5, 15, 25],
+        bikeLaneSafetyScore: 92,
+        bikeLaneType: 'Dedicated Buffered Lane',
+        lectureHallDistances: [
+          { hallName: 'Main Campus Quad', walkTimeMin: 6, distanceMi: 0.3, shuttleAvailable: true },
+          { hallName: 'Undergraduate Library', walkTimeMin: 8, distanceMi: 0.45, shuttleAvailable: true },
+          { hallName: 'Science & Engineering Complex', walkTimeMin: 11, distanceMi: 0.6, shuttleAvailable: true },
+        ],
+      },
+      escrowEligible: true,
+      guarantorAccepted: true,
       createdAt: 'Just now',
     };
 
@@ -310,7 +325,7 @@ export const CreateSubletModal: React.FC<CreateSubletModalProps> = ({
               <div>
                 <span className="font-semibold text-amber-950">Landlord Sublease Authorization Compliance</span>
                 <p className="text-[11px] text-amber-800 mt-0.5">
-                  I confirm that our original master lease allows subleasing or that our property management has provided written consent. QuadHaven will provide the standard institutional sublease contract template upon agreement.
+                  I confirm that our original master lease allows subleasing or that our property management has provided written consent. StudentSquare will provide the standard institutional sublease contract template upon agreement.
                 </p>
               </div>
             </label>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { SubletListing, HousingTerm, Campus, CurrentUser } from '../types';
+import { SubletListing, Campus, CurrentUser } from '../types';
 import { ListingImage } from './ListingImage';
 
 interface SubletDirectoryProps {
@@ -25,9 +25,12 @@ export const SubletDirectory: React.FC<SubletDirectoryProps> = ({
 }) => {
   const [selectedTerm, setSelectedTerm] = useState<string>('all');
   const [selectedType, setSelectedType] = useState<string>('all');
-  const [maxPrice, setMaxPrice] = useState<number>(3000);
+  const [maxPrice, setMaxPrice] = useState<number>(3200);
   const [onlyFurnished, setOnlyFurnished] = useState<boolean>(false);
   const [onlyPetFriendly, setOnlyPetFriendly] = useState<boolean>(false);
+  // Transit & Shuttle overlay filters
+  const [onlyNearShuttle, setOnlyNearShuttle] = useState<boolean>(false);
+  const [onlyHighBikeScore, setOnlyHighBikeScore] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const campusListings = useMemo(() => {
@@ -45,17 +48,21 @@ export const SubletDirectory: React.FC<SubletDirectoryProps> = ({
       if (l.pricePerMonth > maxPrice) return false;
       if (onlyFurnished && !l.furnished) return false;
       if (onlyPetFriendly && !l.petFriendly) return false;
+      if (onlyNearShuttle && l.transit && l.transit.walkTimeToStopMin > 3) return false;
+      if (onlyHighBikeScore && l.transit && l.transit.bikeLaneSafetyScore < 90) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchTitle = l.title.toLowerCase().includes(q);
         const matchNeighborhood = l.neighborhood.toLowerCase().includes(q);
         const matchAddress = l.address.toLowerCase().includes(q);
         const matchPoster = l.poster.name.toLowerCase().includes(q);
-        if (!matchTitle && !matchNeighborhood && !matchAddress && !matchPoster) return false;
+        const matchShuttle = l.transit?.shuttleName.toLowerCase().includes(q);
+        const matchHall = l.transit?.lectureHallDistances.some(h => h.hallName.toLowerCase().includes(q));
+        if (!matchTitle && !matchNeighborhood && !matchAddress && !matchPoster && !matchShuttle && !matchHall) return false;
       }
       return true;
     });
-  }, [campusListings, selectedTerm, selectedType, maxPrice, onlyFurnished, onlyPetFriendly, searchQuery]);
+  }, [campusListings, selectedTerm, selectedType, maxPrice, onlyFurnished, onlyPetFriendly, onlyNearShuttle, onlyHighBikeScore, searchQuery]);
 
   return (
     <div className="space-y-6">
@@ -67,13 +74,15 @@ export const SubletDirectory: React.FC<SubletDirectoryProps> = ({
             <span aria-hidden="true">·</span>
             <span>{currentCampus.city}, {currentCampus.state}</span>
             <span aria-hidden="true">·</span>
-            <span className="font-mono tabular-nums">{campusListings.length} verified listings</span>
+            <span className="font-mono tabular-nums">{campusListings.length} verified sublets</span>
+            <span aria-hidden="true">·</span>
+            <span className="text-emerald-700 font-medium">Shuttle & Transit Synced</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 font-display text-balance">
-            Student Sublets & Lease Takeovers
+            Student Sublets & Campus Transit Overlay
           </h1>
           <p className="text-sm text-stone-600 mt-1 max-w-2xl">
-            Direct lease assignments and summer subleases posted by verified {currentCampus.shortName} students. No broker fees, no Craigslist spammers, and pre-approved landlord permission.
+            Verified student sublets with real-time {currentCampus.shortName} shuttle arrival tracking, bike lane safety scores, walking times to major lecture halls, and parent-guaranteed escrow protection.
           </p>
         </div>
 
@@ -88,16 +97,34 @@ export const SubletDirectory: React.FC<SubletDirectoryProps> = ({
         </button>
       </div>
 
+      {/* Unverified Account Warning Banner */}
+      {!currentUser.isVerified && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3.5 text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <span className="text-base">⚠️</span>
+            <span>
+              <strong>Student Verification Required:</strong> Your university .edu email must be verified before you can post listings, contact hosts, or draft lease agreements.
+            </span>
+          </div>
+          <button
+            onClick={onOpenCreateSublet}
+            className="text-amber-950 font-semibold underline hover:text-black cursor-pointer text-left sm:text-right shrink-0"
+          >
+            Verify .edu Now →
+          </button>
+        </div>
+      )}
+
       {/* Filter and Control Bar */}
       <div className="bg-white rounded-lg border border-stone-200 p-4 space-y-4 shadow-xs">
         {/* Top search & price slider */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-          <div className="md:col-span-6 relative">
+          <div className="md:col-span-5 relative">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by neighborhood, street name, or amenities..."
+              placeholder={`Search by lecture hall (e.g. Dwinelle, PCL), shuttle stop, street...`}
               className="w-full text-xs pl-9 pr-4 py-2 bg-stone-50 border border-stone-200 rounded-md focus:outline-none focus:ring-1 focus:ring-stone-900"
             />
             <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-stone-400">
@@ -131,24 +158,34 @@ export const SubletDirectory: React.FC<SubletDirectoryProps> = ({
             </span>
           </div>
 
-          <div className="md:col-span-3 flex items-center gap-3 justify-end text-xs">
+          {/* Quick amenity & transit checkboxes */}
+          <div className="md:col-span-4 flex items-center gap-3 justify-end text-xs flex-wrap">
+            <label className="flex items-center gap-1.5 cursor-pointer text-stone-700">
+              <input
+                type="checkbox"
+                checked={onlyNearShuttle}
+                onChange={(e) => setOnlyNearShuttle(e.target.checked)}
+                className="rounded border-stone-300 text-stone-900 cursor-pointer"
+              />
+              <span className="whitespace-nowrap font-medium text-amber-900">Shuttle &lt; 3m</span>
+            </label>
+            <label className="flex items-center gap-1.5 cursor-pointer text-stone-700">
+              <input
+                type="checkbox"
+                checked={onlyHighBikeScore}
+                onChange={(e) => setOnlyHighBikeScore(e.target.checked)}
+                className="rounded border-stone-300 text-stone-900 cursor-pointer"
+              />
+              <span className="whitespace-nowrap">Bike 90+</span>
+            </label>
             <label className="flex items-center gap-1.5 cursor-pointer text-stone-700">
               <input
                 type="checkbox"
                 checked={onlyFurnished}
                 onChange={(e) => setOnlyFurnished(e.target.checked)}
-                className="rounded border-stone-300 text-stone-900 focus:ring-0 cursor-pointer"
+                className="rounded border-stone-300 text-stone-900 cursor-pointer"
               />
               <span>Furnished</span>
-            </label>
-            <label className="flex items-center gap-1.5 cursor-pointer text-stone-700">
-              <input
-                type="checkbox"
-                checked={onlyPetFriendly}
-                onChange={(e) => setOnlyPetFriendly(e.target.checked)}
-                className="rounded border-stone-300 text-stone-900 focus:ring-0 cursor-pointer"
-              />
-              <span>Pet Friendly</span>
             </label>
           </div>
         </div>
@@ -211,26 +248,30 @@ export const SubletDirectory: React.FC<SubletDirectoryProps> = ({
           </div>
           <h3 className="text-sm font-semibold text-stone-900">No Sublets Match This Criteria</h3>
           <p className="text-xs text-stone-500 max-w-sm mx-auto">
-            Try adjusting your maximum rent slider or clearing active filters to view all available listings for {currentCampus.name}.
+            Try adjusting your shuttle walking range, maximum rent slider, or clearing active filters for {currentCampus.name}.
           </p>
           <button
             onClick={() => {
               setSelectedTerm('all');
               setSelectedType('all');
-              setMaxPrice(3000);
+              setMaxPrice(3200);
               setOnlyFurnished(false);
               setOnlyPetFriendly(false);
+              setOnlyNearShuttle(false);
+              setOnlyHighBikeScore(false);
               setSearchQuery('');
             }}
             className="px-3 py-1.5 text-xs font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 rounded cursor-pointer"
           >
-            Reset Filters
+            Reset All Filters
           </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredListings.map((listing) => {
             const isSaved = currentUser.savedSubletIds.includes(listing.id);
+            const primaryHall = listing.transit?.lectureHallDistances[0];
+
             return (
               <div
                 key={listing.id}
@@ -269,7 +310,7 @@ export const SubletDirectory: React.FC<SubletDirectoryProps> = ({
                       <span aria-hidden="true">·</span>
                       <span>{listing.roomType}</span>
                       <span aria-hidden="true">·</span>
-                      <span className="text-emerald-700 font-medium">Landlord Approved</span>
+                      <span className="text-emerald-700 font-medium">Escrow Protected</span>
                     </div>
 
                     {/* Listing Title */}
@@ -293,10 +334,36 @@ export const SubletDirectory: React.FC<SubletDirectoryProps> = ({
                       </div>
                     </div>
 
-                    {/* Proximity snippet */}
-                    <p className="text-xs text-stone-600 line-clamp-1">
-                      {listing.distanceToCampus}
-                    </p>
+                    {/* Real-Time Campus Shuttle & Transit Overlay Bar */}
+                    {listing.transit && (
+                      <div className="bg-stone-50 border border-stone-200 rounded p-2.5 space-y-1.5 text-xs">
+                        {/* Shuttle Arrival */}
+                        <div className="flex items-center justify-between text-stone-800">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse shrink-0" />
+                            <span className="font-semibold truncate">{listing.transit.shuttleName}</span>
+                          </div>
+                          <span className="font-mono text-[11px] text-amber-900 shrink-0 font-medium">
+                            {listing.transit.walkTimeToStopMin}m walk · Next: {listing.transit.nextArrivalsMin[0]}m
+                          </span>
+                        </div>
+
+                        {/* Bike Score & Lecture Hall Walk */}
+                        <div className="flex items-center justify-between text-[11px] text-stone-500 pt-1 border-t border-stone-200/70">
+                          <div className="flex items-center gap-1 text-stone-700">
+                            <span>🚲 Bike Score:</span>
+                            <span className="font-mono font-semibold text-emerald-800">
+                              {listing.transit.bikeLaneSafetyScore}/100
+                            </span>
+                          </div>
+                          {primaryHall && (
+                            <span className="truncate max-w-[150px]">
+                              🚶 {primaryHall.walkTimeMin}m to {primaryHall.hallName}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Verified Student Poster */}
                     <div className="pt-2 border-t border-stone-100 flex items-center justify-between text-xs">
@@ -304,7 +371,7 @@ export const SubletDirectory: React.FC<SubletDirectoryProps> = ({
                         <div className={`w-5 h-5 rounded-full ${listing.poster.avatarColor} text-white text-[10px] font-bold flex items-center justify-center`}>
                           {listing.poster.name[0]}
                         </div>
-                        <span className="text-stone-700 font-medium truncate max-w-[130px]">
+                        <span className="text-stone-700 font-medium truncate max-w-[120px]">
                           {listing.poster.name}
                         </span>
                       </div>
@@ -312,7 +379,7 @@ export const SubletDirectory: React.FC<SubletDirectoryProps> = ({
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
                         </svg>
-                        <span>@{currentCampus.emailDomain}</span>
+                        <span>Verified Student</span>
                       </span>
                     </div>
                   </div>
@@ -324,7 +391,7 @@ export const SubletDirectory: React.FC<SubletDirectoryProps> = ({
                     onClick={() => onSelectListing(listing)}
                     className="py-1.5 px-2 font-medium text-stone-700 hover:text-stone-900 hover:bg-stone-200/70 rounded transition-colors cursor-pointer"
                   >
-                    Details
+                    Transit & Details
                   </button>
                   <button
                     onClick={() => onMessagePoster(listing)}

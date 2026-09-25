@@ -9,6 +9,8 @@ interface SubletDetailModalProps {
   currentCampus: Campus;
   onMessagePoster: (listing: SubletListing) => void;
   onDraftContract: (listing: SubletListing) => void;
+  onOpenParentPortal: () => void;
+  onOpenEscrowModal: () => void;
 }
 
 export const SubletDetailModal: React.FC<SubletDetailModalProps> = ({
@@ -18,6 +20,8 @@ export const SubletDetailModal: React.FC<SubletDetailModalProps> = ({
   currentCampus,
   onMessagePoster,
   onDraftContract,
+  onOpenParentPortal,
+  onOpenEscrowModal,
 }) => {
   if (!listing) return null;
 
@@ -78,7 +82,7 @@ export const SubletDetailModal: React.FC<SubletDetailModalProps> = ({
               </p>
             </div>
 
-            <div className="bg-stone-50 border border-stone-200 rounded-lg p-3 text-right shrink-0 min-w-[180px]">
+            <div className="bg-stone-50 border border-stone-200 rounded-lg p-3 text-right shrink-0 min-w-[190px]">
               <div className="text-2xl font-bold text-stone-900 font-mono tabular-nums">
                 ${listing.pricePerMonth}
                 <span className="text-xs text-stone-500 font-normal"> / mo</span>
@@ -93,17 +97,97 @@ export const SubletDetailModal: React.FC<SubletDetailModalProps> = ({
             </div>
           </div>
 
-          {/* Landlord Permission & Security Assurance */}
-          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3.5 flex items-start gap-3">
-            <svg className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-            <div className="text-xs">
-              <h2 className="text-xs font-semibold text-emerald-950">Landlord-Approved Sublet</h2>
-              <p className="text-emerald-800 mt-0.5">
-                The primary leaseholder has confirmed property manager consent for this sublease. QuadHaven will provide the official university-standard sublease agreement to prevent any unauthorized occupant disputes.
+          {/* Real-Time Campus Shuttle & Transit Overlay Module */}
+          {listing.transit && (
+            <div className="bg-stone-50 border border-stone-200 rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-stone-200">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
+                  <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-900 font-mono">
+                    Real-Time Campus Transit & Shuttle Overlay
+                  </h2>
+                </div>
+                <span className="text-[11px] font-mono text-stone-500">Live GPS Telemetry</span>
+              </div>
+
+              {/* Shuttle Stop & Live Arrivals */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 bg-white rounded border border-stone-200 space-y-1">
+                  <div className="flex items-center justify-between text-stone-500">
+                    <span className="font-medium">Primary Campus Shuttle</span>
+                    <span className="font-mono text-[10px] text-amber-800">
+                      {listing.transit.walkTimeToStopMin} min walk to stop
+                    </span>
+                  </div>
+                  <p className="font-semibold text-stone-900 text-sm">{listing.transit.shuttleName}</p>
+                  <p className="text-stone-500 text-[11px]">Stop: {listing.transit.nearestStop}</p>
+
+                  <div className="pt-2 flex items-center gap-1.5">
+                    <span className="text-[10px] text-stone-400 font-mono">Next Arrivals:</span>
+                    {listing.transit.nextArrivalsMin.map((mins, idx) => (
+                      <span key={idx} className="px-1.5 py-0.5 bg-emerald-50 text-emerald-800 rounded font-mono font-bold text-[11px] border border-emerald-200">
+                        {mins} min
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-3 bg-white rounded border border-stone-200 space-y-1">
+                  <div className="flex items-center justify-between text-stone-500">
+                    <span className="font-medium">Bike Commute & Route Safety</span>
+                    <span className="font-mono font-bold text-emerald-800">
+                      {listing.transit.bikeLaneSafetyScore}/100
+                    </span>
+                  </div>
+                  <p className="font-semibold text-stone-900 text-sm">{listing.transit.bikeLaneType}</p>
+                  <p className="text-stone-500 text-[11px]">
+                    Continuous protected grade-separated bike pathway connecting directly into the university quad.
+                  </p>
+                </div>
+              </div>
+
+              {/* Walking routes to major lecture halls */}
+              <div>
+                <span className="text-[11px] font-mono uppercase tracking-wider text-stone-500 block mb-2">
+                  Walking Distance to Major Lecture Halls & Libraries:
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  {listing.transit.lectureHallDistances.map((hall, idx) => (
+                    <div key={idx} className="p-2 bg-white rounded border border-stone-200 space-y-0.5">
+                      <span className="font-semibold text-stone-900 block truncate">{hall.hallName}</span>
+                      <div className="flex items-center justify-between text-[11px] text-stone-500">
+                        <span className="font-mono font-medium text-amber-950">🚶 {hall.walkTimeMin} min</span>
+                        <span>{hall.distanceMi} mi</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Sublet Insurance & Deposit Escrow Guarantee */}
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex items-start justify-between gap-4">
+            <div className="space-y-1 text-xs">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-emerald-700 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+                <h3 className="font-semibold text-emerald-950">Deposit Escrow & $10,000 Protection Shield</h3>
+              </div>
+              <p className="text-emerald-800 leading-relaxed">
+                Security deposits on StudentSquare are held in a third-party escrow account and are NOT released until 48 hours after your move-in inspection confirms everything matches the listing. Includes $10,000 accidental damage protection.
               </p>
             </div>
+            <button
+              onClick={() => {
+                onClose();
+                onOpenEscrowModal();
+              }}
+              className="px-3 py-1.5 text-xs font-semibold text-emerald-900 bg-white border border-emerald-300 hover:bg-emerald-100/50 rounded shrink-0 cursor-pointer"
+            >
+              Escrow Details
+            </button>
           </div>
 
           {/* Description */}
@@ -133,39 +217,44 @@ export const SubletDetailModal: React.FC<SubletDetailModalProps> = ({
             </div>
           </div>
 
-          {/* Verified Student Host Profile */}
-          <div className="border border-stone-200 rounded-lg p-4 bg-stone-50 space-y-3">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-500 font-mono">
-              Current Leaseholder / Poster
-            </h2>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full ${listing.poster.avatarColor} text-white font-bold flex items-center justify-center text-sm`}>
-                  {listing.poster.name[0]}
+          {/* Verified Host Profile */}
+          <div className="border border-stone-200 rounded-lg p-4 bg-stone-50 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-full ${listing.poster.avatarColor} text-white font-bold flex items-center justify-center text-sm`}>
+                {listing.poster.name[0]}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-stone-900">{listing.poster.name}</span>
+                  <span className="text-[11px] text-emerald-700 font-mono bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                    Verified Student
+                  </span>
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-stone-900">{listing.poster.name}</span>
-                    <span className="text-[11px] text-emerald-700 font-mono bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                      Verified Student
-                    </span>
-                  </div>
-                  <p className="text-xs text-stone-600">
-                    {listing.poster.major} · {listing.poster.year}
-                  </p>
-                  <p className="text-xs text-stone-500 font-mono mt-0.5">
-                    {listing.poster.email}
-                  </p>
-                </div>
+                <p className="text-xs text-stone-600">
+                  {listing.poster.major} · {listing.poster.year}
+                </p>
+                <p className="text-xs text-stone-500 font-mono mt-0.5">
+                  {listing.poster.email}
+                </p>
               </div>
             </div>
+
+            <button
+              onClick={() => {
+                onClose();
+                onOpenParentPortal();
+              }}
+              className="text-xs text-stone-700 hover:text-stone-900 underline font-medium cursor-pointer"
+            >
+              Invite Parent / Guarantor
+            </button>
           </div>
         </div>
 
         {/* Modal Action Footer */}
         <div className="px-6 py-4 border-t border-stone-200 bg-stone-50 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="text-xs text-stone-500">
-            Protected by Campus Student Honor Code
+            Protected by StudentSquare Escrow & Campus Honor Code
           </div>
           <div className="flex items-center gap-2">
             <button
